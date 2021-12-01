@@ -231,7 +231,7 @@ v850es_regs.update(
 
 v850es_intrinsics = {
     'bsh': bn.IntrinsicInfo([bn.IntrinsicInput(bn.Type.int(4), "src")], [bn.Type.int(4)]),
-    'bsw': bn.IntrinsicInfo([bn.IntrinsicInput(bn.Type.int(4), "src")], [bn.Type.int(4)])
+    'bsw': bn.IntrinsicInfo([bn.IntrinsicInput(bn.Type.int(4), "src")], [bn.Type.int(4)]),
     'hsw': bn.IntrinsicInfo([bn.IntrinsicInput(bn.Type.int(4), "src")], [bn.Type.int(4)])
 }
 
