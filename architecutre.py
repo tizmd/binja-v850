@@ -47,7 +47,9 @@ class OperandToText(Operand.Visitor):
             token_type = bn.InstructionTextTokenType.PossibleAddressToken
         else:
             token_type = bn.InstructionTextTokenType.IntegerToken
-        ret = [bn.InstructionTextToken(token_type, op.disp.fmt % int(op.disp))]
+        ret = []
+        if op.base == REG.R0 or int(op.disp) != 0:
+            ret += [bn.InstructionTextToken(token_type, op.disp.fmt % int(op.disp))]
         if op.base != REG.R0:
             ret += [bn.InstructionTextToken(bn.InstructionTextTokenType.BeginMemoryOperandToken, "["),
                     bn.InstructionTextToken(bn.InstructionTextTokenType.RegisterToken, "%s" % op.base.name.lower()),
