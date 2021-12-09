@@ -22,6 +22,10 @@ class OperandGet(Operand.Visitor):
     def visit_Imm(self, op, il: bn.LowLevelILFunction, size=4):
         return il.const(size, int(op))
 
+    def visit_RegMem(self, op, il: bn.LowLevelILFunction, size=4):
+        base = reg(op.val, il)
+        return il.load(size, base)
+
     def visit_Displacement(self, op, il: bn.LowLevelILFunction, size=4):
         base = reg(op.base, il)
         disp = il.const(4, int(op.disp))
@@ -44,7 +48,12 @@ class OperandDest(Operand.Visitor):
             return il.const(size, 0)
         return reg(op.val, il)
 
-
+    def visit_BasedJump(self, op, il: bn.LowLevelILFunction, length, size=4):
+        assert size == 4
+        if op.base == REG.R0:
+            return il.const(size, int(op.disp))
+        else:
+            return il.add(4, reg(op.base, il), il.const(4, int(op.disp)))
 class OperandSet(Operand.Visitor):
     def __init__(self, addr):
         self.addr = addr
@@ -212,6 +221,7 @@ class V850Lifter(LifterBase):
         setter = OperandSet(addr)
         dst = operands[-1]
         b = dst.accept(getter, il, size=1)
+        assert hasattr(b, "index"), type(dst)
         if len(operands) == 1:
             index = il.const(1, int(dst.index))
         else:
@@ -271,6 +281,7 @@ class V850Lifter(LifterBase):
         dst, = operands
         destvis = OperandDest(addr)
         dest = dst.accept(destvis, il, length)
+        assert dest is not None, dst
         if isinstance(dst, RegJump) and dst.val == REG.LP:
             ex = il.ret(dest)
         else:
@@ -406,12 +417,16 @@ class V850Lifter(LifterBase):
             il.append(il.set_reg(4, "ep", val))
 
     def lift_SAR(self, mnem, operands, length, addr, il: bn.LowLevelILFunction):
-        src, dst = operands
+        sft, src = operands[:2]
+        if len(operands) == 3:
+            dst = operands[2]
+        else:
+            dst = src
         getter = OperandGet(addr)
-        val0 = src.accept(getter, il, size=4)
-        val1 = dst.accept(getter, il, size=4)
+        val0 = sft.accept(getter, il, size=4)
+        val1 = src.accept(getter, il, size=4)
 
-        if isinstance(src, Reg):
+        if isinstance(sft, Reg):
             val0 = il.and_expr(4, val0, il.const(4, 0x1f))
         exp = il.arith_shift_right(4, val1, val0, flags="nosat")
         setter = OperandSet(addr)
@@ -424,24 +439,32 @@ class V850Lifter(LifterBase):
         return self.bit1op(mnem, operands, length, addr, il, set1)
 
     def lift_SHL(self, mnem, operands, length, addr, il: bn.LowLevelILFunction):
-        src, dst = operands
+        sft, src = operands[:2]
+        if len(operands) == 3:
+            dst = operands[2]
+        else:
+            dst = src
         getter = OperandGet(addr)
-        val0 = src.accept(getter, il, size=4)
-        val1 = dst.accept(getter, il, size=4)
+        val0 = sft.accept(getter, il, size=4)
+        val1 = src.accept(getter, il, size=4)
 
-        if isinstance(src, Reg):
+        if isinstance(sft, Reg):
             val0 = il.and_expr(4, val0, il.const(4, 0x1f))
         exp = il.shift_left(4, val1, val0, flags="nosat")
         setter = OperandSet(addr)
         dst.accept(setter, il, exp, size=4)
 
     def lift_SHR(self, mnem, operands, length, addr, il: bn.LowLevelILFunction):
-        src, dst = operands
+        sft, src = operands[:2]
+        if len(operands) == 3:
+            dst = operands[2]
+        else:
+            dst = src
         getter = OperandGet(addr)
-        val0 = src.accept(getter, il, size=4)
-        val1 = dst.accept(getter, il, size=4)
+        val0 = sft.accept(getter, il, size=4)
+        val1 = src.accept(getter, il, size=4)
 
-        if isinstance(src, Reg):
+        if isinstance(sft, Reg):
             val0 = il.and_expr(4, val0, il.const(4, 0x1f))
         exp = il.logical_shift_right(4, val1, val0, flags="nosat")
         setter = OperandSet(addr)
@@ -576,14 +599,14 @@ class V850ESLifter(V850Lifter):
         src, dst = operands
         getter = OperandGet(addr)
         val = src.accept(getter, il, size=4)
-        ex = il.intrinsic([il.reg(4, dst.val.name.lower())], bn.IntrinsicName("bsh"), [val])
+        ex = il.intrinsic([il.reg(4, dst.val.name.lower())], "bsh", [val])
         il.append(ex)
 
     def lift_BSW(self, mnem, operands, length, addr, il: bn.LowLevelILFunction):
         src, dst = operands
         getter = OperandGet(addr)
         val = src.accept(getter, il, size=4)
-        ex = il.intrinsic([il.reg(4, dst.val.name.lower())], bn.IntrinsicName("bsw"), [val])
+        ex = il.intrinsic([il.reg(4, dst.val.name.lower())], "bsw", [val])
         il.append(ex)
 
     def lift_CALLT(self, mnem, operands, length, addr, il: bn.LowLevelILFunction):
@@ -610,7 +633,7 @@ class V850ESLifter(V850Lifter):
         src, dst = operands
         getter = OperandGet(addr)
         val = src.accept(getter, il, size=4)
-        ex = il.intrinsic([il.reg(4, dst.val.name.lower())], bn.IntrinsicName("hsw"), [val])
+        ex = il.intrinsic([il.reg(4, dst.val.name.lower())], "hsw", [val])
         il.append(ex)
 
 
@@ -624,7 +647,7 @@ class V850E2Lifter(V850ESLifter):
             il.append(ex)
         else:
             bsel = il.reg(4, "bsel")
-            ex = il.intrinsic([], bn.IntrinsicName("ldsr"), [val, il.const(1, rid), bsel])
+            ex = il.intrinsic([], "ldsr", [val, il.const(1, rid), bsel])
             il.append(ex)
 
     def stsr(self, rid, reg, il: bn.LowLevelILFunction):
@@ -634,7 +657,7 @@ class V850E2Lifter(V850ESLifter):
             il.append(ex)
         else:
             bsel = il.reg(4, "bsel")
-            ex = il.intrinsic([il.reg(4, reg)], bn.IntrinsicName("stsr"), [il.const(1, rid), bsel])
+            ex = il.intrinsic([il.reg(4, reg)], "stsr", [il.const(1, rid), bsel])
             il.append(ex)
 
 
@@ -650,28 +673,28 @@ class V850E2Lifter(V850ESLifter):
         src, dst = operands
         getter = OperandGet(addr)
         val = src.accept(getter, il, size=4)
-        ex = il.intrinsic([il.reg(4, dst.val.name.lower())], bn.IntrinsicName("sch0l"), [val])
+        ex = il.intrinsic([il.reg(4, dst.val.name.lower())], "sch0l", [val])
         il.append(ex)
 
     def lift_SCH0R(self, mnem, operands, length, addr, il: bn.LowLevelILFunction):
         src, dst = operands
         getter = OperandGet(addr)
         val = src.accept(getter, il, size=4)
-        ex = il.intrinsic([il.reg(4, dst.val.name.lower())], bn.IntrinsicName("sch0r"), [val])
+        ex = il.intrinsic([il.reg(4, dst.val.name.lower())], "sch0r", [val])
         il.append(ex)
 
     def lift_SCH1L(self, mnem, operands, length, addr, il: bn.LowLevelILFunction):
         src, dst = operands
         getter = OperandGet(addr)
         val = src.accept(getter, il, size=4)
-        ex = il.intrinsic([il.reg(4, dst.val.name.lower())], bn.IntrinsicName("sch1l"), [val])
+        ex = il.intrinsic([il.reg(4, dst.val.name.lower())], "sch1l", [val])
         il.append(ex)
 
     def lift_SCH1R(self, mnem, operands, length, addr, il: bn.LowLevelILFunction):
         src, dst = operands
         getter = OperandGet(addr)
         val = src.accept(getter, il, size=4)
-        ex = il.intrinsic([il.reg(4, dst.val.name.lower())], bn.IntrinsicName("sch1r"), [val])
+        ex = il.intrinsic([il.reg(4, dst.val.name.lower())], "sch1r", [val])
         il.append(ex)
 
 
@@ -691,7 +714,7 @@ class RH850Lifter(V850E2Lifter):
             if sr != SREG_RH850.BSEL:
                 il.append(il.set_reg(4, sr.name.lower(), reg))
         except ValueError:
-            ex = il.intrinsic([], bn.IntrinsicName("ldsr"), [reg, il.const(1, rID), sel])
+            ex = il.intrinsic([], "ldsr", [reg, il.const(1, rID), sel])
             il.append(ex)
 
 
@@ -711,7 +734,7 @@ class RH850Lifter(V850E2Lifter):
                 sr = il.reg(4, sr.name.lower())
             il.append(il.set_reg(4, reg, sr))
         except ValueError:
-            ex = il.intrinsic([il.reg(4, reg)], bn.IntrinsicName("stsr"), [il.const(1, rID), sel])
+            ex = il.intrinsic([il.reg(4, reg)], "stsr", [il.const(1, rID), sel])
             il.append(ex)
 
 

@@ -18,14 +18,14 @@ def bs2int(bs: bytes, endianess=0) -> int:
 
 
 def invalid(size=1):
-    def f(fmt: Format):
+    def f(cxt, fmt: Format):
         return MNEM.INVALID_CODE, [], size
 
     return f
 
 
 def undef(size=1):
-    def f(fmt: Format):
+    def f(cxt, fmt: Format):
         return MNEM.UNDEF_CODE, [], size
 
     return f
@@ -71,7 +71,7 @@ def subtable02(cxt: DecoderContext, fmt: Format):
     elif not fmt.lo5 and fmt.hi5 == 0x1f:
         return MNEM.DBTRAP, [], 1
     elif not fmt.lo5 and not fmt.hi5:
-        return MNEM.RIE
+        return MNEM.RIE, [], 1
     elif not fmt.lo5 and fmt.hi5 <= 0x0f:
         return MNEM.FETRAP, [VecJump(fmt.hi5, width=4)], 1
     return MNEM.INVALID_CODE, [], 1
