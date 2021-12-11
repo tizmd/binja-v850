@@ -54,6 +54,7 @@ class OperandDest(Operand.Visitor):
             return il.const(size, int(op.disp))
         else:
             return il.add(4, reg(op.base, il), il.const(4, int(op.disp)))
+
 class OperandSet(Operand.Visitor):
     def __init__(self, addr):
         self.addr = addr
@@ -62,7 +63,11 @@ class OperandSet(Operand.Visitor):
         pass
 
     def visit_Reg(self, op, il: bn.LowLevelILFunction, val, size=4):
-        ex = il.set_reg(size, op.val.name.lower(), val)
+        if op.val != REG.R0:
+            ex = il.set_reg(size, op.val.name.lower(), val)
+        else:
+            assert size == 4
+            ex = val
         il.append(ex)
         return il
 
