@@ -590,9 +590,9 @@ def ext_subtable02(cxt: DecoderContext, fmt: Format):
     """ STSR """
     if fmt.ext_lo5 == 0:
         if fmt.ext_hi5 == 0:
-            return MNEM.STSR, [SReg(fmt.hi5), Reg(fmt.lo5)], 2
+            return MNEM.STSR, [SReg(fmt.lo5), Reg(fmt.hi5)], 2
         elif cxt.subarch.value >= Subarch.RH850:
-            return MNEM.STSR, [SReg(fmt.hi5), Reg(fmt.lo5), Imm(fmt.ext_hi5, width=5, signed=False)], 2
+            return MNEM.STSR, [SReg(fmt.lo5), Reg(fmt.hi5), Imm(fmt.ext_hi5, width=5, signed=False)], 2
     return MNEM.INVALID_CODE, [], 2
 
 
