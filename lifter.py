@@ -55,6 +55,7 @@ class OperandDest(Operand.Visitor):
         else:
             return il.add(4, reg(op.base, il), il.const(4, int(op.disp)))
 
+
 class OperandSet(Operand.Visitor):
     def __init__(self, addr):
         self.addr = addr
@@ -117,8 +118,33 @@ class LifterBase(object):
         il.append(il.unimplemented())
 
 
+def il_if_then(il: bn.LowLevelILFunction, cond, then_):
+    t = bn.LowLevelILLabel()
+    e = bn.LowLevelILLabel()
+    il.append(il.if_expr(cond, t, e))
+    il.mark_label(t)
+    then_(il)
+    il.append(il.goto(e))
+    il.mark_label(e)
+
+
+def il_if_then_else(il: bn.LowLevelILFunction, cond, then_, else_):
+    t = bn.LowLevelILLabel()
+    f = bn.LowLevelILLabel()
+    e = bn.LowLevelILLabel()
+    il.append(il.if_expr(cond, t, f))
+    il.mark_label(t)
+    then_(il)
+    il.append(il.goto(e))
+    il.mark_label(f)
+    else_(il)
+    il.append(il.goto(e))
+    il.mark_label(e)
+
+
 class V850Lifter(LifterBase):
     sysreg = SREG_V850
+
     def get_sysreg(self, rID, ldsr=False):
         if ldsr and rID == 4:
             return None
@@ -175,6 +201,23 @@ class V850Lifter(LifterBase):
         setter = OperandSet(addr)
         dst.accept(setter, il, exp, size=4)
 
+    cond_il = {
+        COND.V: lambda il: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_O),
+        COND.L: lambda il: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_ULT),
+        COND.Z: lambda il: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_E),
+        COND.NH: lambda il: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_ULE),
+        COND.N: lambda il: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_NEG),
+        COND.LT: lambda il: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_SLT),
+        COND.LE: lambda il: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_SLE),
+        COND.NV: lambda il: il.not_expr(0, il.flag_condition(bn.LowLevelILFlagCondition.LLFC_O)),
+        COND.NL: lambda il: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_UGE),
+        COND.NZ: lambda il: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_NE),
+        COND.H: lambda il: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_UGT),
+        COND.P: lambda il: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_POS),
+        COND.SA: lambda il: il.flag("sat"),
+        COND.GE: lambda il: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_SGE),
+        COND.GT: lambda il: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_SGT),
+    }
     def lift_B(self, mnem, operands, length, addr, il: bn.LowLevelILFunction):
         cond, disp = operands
         dest = addr + int(disp)
@@ -187,23 +230,7 @@ class V850Lifter(LifterBase):
                 ex = il.jump(il.const_pointer(4, dest))
             il.append(ex)
         else:
-            cond_il = {
-                COND.V: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_O),
-                COND.L: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_ULT),
-                COND.Z: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_E),
-                COND.NH: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_ULE),
-                COND.N: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_NEG),
-                COND.LT: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_SLT),
-                COND.LE: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_SLE),
-                COND.NV: il.not_expr(0, il.flag_condition(bn.LowLevelILFlagCondition.LLFC_O)),
-                COND.NL: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_UGE),
-                COND.NZ: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_NE),
-                COND.H: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_UGT),
-                COND.P: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_POS),
-                COND.SA: il.flag("sat"),
-                COND.GE: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_SGE),
-                COND.GT: il.flag_condition(bn.LowLevelILFlagCondition.LLFC_SGT),
-            }[cond.val]
+            c = self.cond_il[cond.val](il)
             if tgt:
                 t = tgt
             else:
@@ -212,7 +239,7 @@ class V850Lifter(LifterBase):
                 f = flt
             else:
                 f = bn.LowLevelILLabel()
-            ex = il.if_expr(cond_il, t, f)
+            ex = il.if_expr(c, t, f)
             il.append(ex)
             if not tgt:
                 il.mark_label(t)
@@ -226,7 +253,7 @@ class V850Lifter(LifterBase):
         setter = OperandSet(addr)
         dst = operands[-1]
         b = dst.accept(getter, il, size=1)
-        assert hasattr(b, "index"), type(dst)
+        # assert hasattr(dst, "index"), (b,type(dst))
         if len(operands) == 1:
             index = il.const(1, int(dst.index))
         else:
@@ -443,6 +470,16 @@ class V850Lifter(LifterBase):
 
         return self.bit1op(mnem, operands, length, addr, il, set1)
 
+    def lift_SETF(self, mnem, operands, length, addr, il: bn.LowLevelILFunction):
+        cccc, reg = operands
+        c = self.cond_il[cccc.val](il)
+        setter = OperandSet(addr)
+        def t(il):
+            reg.accept(setter, il, il.const(4,1))
+        def f(il):
+            reg.accept(setter, il, il.const(4, 0))
+        il_if_then_else(il, c, t, f)
+
     def lift_SHL(self, mnem, operands, length, addr, il: bn.LowLevelILFunction):
         sft, src = operands[:2]
         if len(operands) == 3:
@@ -628,6 +665,14 @@ class V850ESLifter(V850Lifter):
         e = il.jump(il.add(4, il.reg(4, "ctbp"), il.zero_extend(4, ld)))
         il.append(e)
 
+    def lift_CMOV(self, mnem, operands, length, addr, il: bn.LowLevelILFunction):
+        cccc, op1, reg2, reg3 = operands
+        getter = OperandGet(addr)
+        setter = OperandSet(addr)
+        c = self.cond_il[cccc.val](il)
+        il_if_then_else(il, c, lambda il: reg3.accept(setter, il, op1.accept(getter, il, size=4),size=4)
+                        , lambda il: reg3.accept(setter, il, reg2.accept(getter, il, size=4), size=4))
+
     def lift_CTRET(self, mnem, operands, length, addr, il: bn.LowLevelILFunction):
         e = il.set_reg(4, "psw", il.reg(4, "ctpsw"))
         il.append(e)
@@ -642,9 +687,9 @@ class V850ESLifter(V850Lifter):
         il.append(ex)
 
 
-
 class V850E2Lifter(V850ESLifter):
     sysreg = SREG_V850E2M
+
     def ldsr(self, val, rid, il: bn.LowLevelILFunction):
         if 28 <= rid < 32:
             sr = self.sysreg(rid)
@@ -665,14 +710,12 @@ class V850E2Lifter(V850ESLifter):
             ex = il.intrinsic([il.reg(4, reg)], "stsr", [il.const(1, rid), bsel])
             il.append(ex)
 
-
     def lift_HSW(self, mnem, operands, length, addr, il: bn.LowLevelILFunction):
         src, dst = operands
         getter = OperandGet(addr)
         val = src.accept(getter, il, size=4)
         ex = il.set_reg(4, dst.val.name.lower(), val)  # should set flags
         il.append(ex)
-
 
     def lift_SCH0L(self, mnem, operands, length, addr, il: bn.LowLevelILFunction):
         src, dst = operands
@@ -703,9 +746,9 @@ class V850E2Lifter(V850ESLifter):
         il.append(ex)
 
 
-
 class RH850Lifter(V850E2Lifter):
     sysreg = SREG_V850
+
     def lift_LDSR(self, mnem, operands, length, addr, il: bn.LowLevelILFunction):
         reg, sreg = operands[:2]
         rID = int(sreg)
@@ -721,7 +764,6 @@ class RH850Lifter(V850E2Lifter):
         except ValueError:
             ex = il.intrinsic([], "ldsr", [reg, il.const(1, rID), sel])
             il.append(ex)
-
 
     def lift_STSR(self, mnem, operands, length, addr, il: bn.LowLevelILFunction):
         sreg, reg = operands
@@ -741,9 +783,6 @@ class RH850Lifter(V850E2Lifter):
         except ValueError:
             ex = il.intrinsic([il.reg(4, reg)], "stsr", [il.const(1, rID), sel])
             il.append(ex)
-
-
-
 
 
 def choose_lifter(subarch: Subarch):
