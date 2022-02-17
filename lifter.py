@@ -340,7 +340,10 @@ class V850Lifter(LifterBase):
         getter = OperandGet(addr)
         val = src.accept(getter, il, size=size)
         if size < 4:
-            val = il.sign_extend(4, val)
+            if signed:
+                val = il.sign_extend(4, val)
+            else:
+                val = il.zero_extend(4, val)
         setter = OperandSet(addr)
         dst.accept(setter, il, val, 4)
 
