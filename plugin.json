@@ -11,6 +11,16 @@
   },
   "dependencies": {},
   "author": "Tomonori Izumida <tizmd@iij.ad.jp>",
-  "version": "0.1.0",
-  "minimumbinaryninjaversion": 1200
+  "version": "0.1.1",
+  "minimumbinaryninjaversion": 1200,
+  "platforms": [
+    "Darwin",
+    "Windows",
+    "Linux"
+  ],
+  "installinstructions": {
+    "Darwin": "",
+    "Windows": "",
+    "Linux": ""
+  }
 }

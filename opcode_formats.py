@@ -289,6 +289,7 @@ class FormatXII(Format):
     def imm10(self):
         return self._imm_hi << 5 | self.lo5
 
+
 class FormatXIII(Format):
     @bitfield(hi=4, lo=1)
     def imm5(self):
@@ -326,6 +327,7 @@ class FormatXIII(Format):
     def imm32(self):
         return self._imm16_hi << 16 | self._imm16_lo
 
+
 class FormatXIV(Format):
     @bitfield(hi=4, lo=0, ret_type=REG)
     def reg1(self):
@@ -350,6 +352,7 @@ class FormatXIV(Format):
     @property
     def disp23(self):
         return self._disp_hi << 7 | self._disp_lo
+
 
 class FormatF(Format):
     @bitfield(hi=4, lo=0, ret_type=REG)

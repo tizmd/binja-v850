@@ -23,7 +23,7 @@ class OperandToText(Operand.Visitor):
 
     def visit_RelJump(self, op):
         return [
-            bn.InstructionTextToken(bn.InstructionTextTokenType.PossibleAddressToken, "%.8x" % (self.addr + int(op)))]
+            bn.InstructionTextToken(bn.InstructionTextTokenType.PossibleAddressToken, "%.8x" % (int(op + self.addr)))]
 
     def visit_RegJump(self, op):
         return [bn.InstructionTextToken(bn.InstructionTextTokenType.BeginMemoryOperandToken, "["),

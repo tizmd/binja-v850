@@ -35,6 +35,12 @@ class BitInt(object):
     def __eq__(self, op):
         return int(self) == int(op)
 
+    def __add__(self, other):
+        width = self.width
+        if isinstance(other, BitInt) and other.width > width:
+            width = other.width
+        return type(self)(self.val + int(other), width=width, signed=self.signed)
+
 
 class Imm(Operand, BitInt):
     def __str__(self):
@@ -71,6 +77,7 @@ class SReg(Operand):
 
     def __str__(self):
         return "sr%d" % self.reg_id
+
 
 class Cond(EnumOperand):
     enum_class = enums.COND
@@ -189,7 +196,7 @@ class RegPair(Operand):
                 assert rh > 0
                 reg_hi = enums.REG(rh)
                 reg_lo = enums.REG(rh - 1)
-        #assert int(reg_hi) == int(reg_lo) + 1, "reg_hi, reg_lo=%s, %s" % (reg_hi, reg_lo)
+        # assert int(reg_hi) == int(reg_lo) + 1, "reg_hi, reg_lo=%s, %s" % (reg_hi, reg_lo)
         self._regpair = (reg_hi, reg_lo)
 
     def __iter__(self):

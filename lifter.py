@@ -720,6 +720,11 @@ class V850E2Lifter(V850ESLifter):
         ex = il.set_reg(4, dst.val.name.lower(), val)  # should set flags
         il.append(ex)
 
+    def lift_RIE(self, mnem, operands, length, addr, il: bn.LowLevelILFunction):
+        il.set_reg(4, bn.RegisterName("fepc"), il.const(4, addr + 4))
+        il.set_reg(4, bn.RegisterName("fepsw"), il.reg(4, bn.RegisterName("psw")))
+        il.append(il.jump(il.const(4, 0x30)))
+
     def lift_SCH0L(self, mnem, operands, length, addr, il: bn.LowLevelILFunction):
         src, dst = operands
         getter = OperandGet(addr)
